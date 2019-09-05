@@ -8,12 +8,21 @@ class Zio extends SemanticRule("Zio") {
 
   override def fix(implicit doc: SemanticDocument): Patch = {
     Patch.replaceSymbols(
-      "cats/effect/IO" -> "zio/Task"
+      "cats/effect/IO" -> "zio/Task",
+      "cats/effect/IOApp" -> "zio/App"
     ) ++ doc.tree.collect {
       case pureMatcher(Term.Apply(Term.Select(_, s), _)) =>
         Patch.replaceTree(s, "succeed")
       case raiseErrorMatcher(Term.Apply(Term.Select(_, s), _)) =>
         Patch.replaceTree(s, "fail")
+      case exitCodeSuccessMatcher(s) =>
+        if (s.toString().endsWith("Success"))
+          Patch.replaceTree(s, "0")
+        else if (s.toString().endsWith("Error"))
+          Patch.replaceTree(s, "1")
+        else Patch.empty
+//      case exitCodeErrorMatcher(s) =>
+//        Patch.replaceTree(s, "1")
       case t @ unsafeRunSyncMatcher(Term.Apply(Term.Select(term, s), _)) =>
         t.parent.map { parentTree =>
           Patch.addGlobalImport(Symbol("zio/DefaultRuntime.")) +
@@ -31,4 +40,6 @@ class Zio extends SemanticRule("Zio") {
   val pureMatcher = SymbolMatcher.normalized("cats/effect/IO#pure.")
   val raiseErrorMatcher = SymbolMatcher.normalized("cats/effect/IO#raiseError.")
   val unsafeRunSyncMatcher = SymbolMatcher.normalized("cats/effect/IO#unsafeRunSync")
+  val exitCodeSuccessMatcher = SymbolMatcher.exact("cats/effect/ExitCode.Success.", "cats/effect/ExitCode.Error.")
+  //val exitCodeErrorMatcher = SymbolMatcher.exact("cats/effect/ExitCode.Error.")
 }
